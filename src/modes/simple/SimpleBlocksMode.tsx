@@ -5,6 +5,7 @@ import {
   Clock,
   Cog,
   Compass,
+  GripVertical,
   Hand,
   Infinity as InfinityIcon,
   Lightbulb,
@@ -86,6 +87,12 @@ export const SimpleBlocksMode: React.FC<Props> = ({ lang }) => {
   const [running, setRunning] = useState(false);
   const [activeBlocks, setActiveBlocks] = useState<Record<string, string | null>>({});
   const [selectedStackId, setSelectedStackId] = useState<string>(stacks[0]?.id ?? '');
+  const [dragSource, setDragSource] = useState<
+    | { kind: 'block'; stackId: string; index: number }
+    | { kind: 'palette'; blockType: SimpleBlock['type'] }
+    | null
+  >(null);
+  const [dropTarget, setDropTarget] = useState<{ stackId: string; index: number } | null>(null);
   const runtimeRef = useRef<ProgramRuntime | null>(null);
 
   useEffect(() => {
@@ -207,6 +214,59 @@ export const SimpleBlocksMode: React.FC<Props> = ({ lang }) => {
     );
   };
 
+  const handleDropAt = (targetStackId: string, targetIndex: number) => {
+    if (!dragSource) return;
+
+    if (dragSource.kind === 'palette') {
+      const newBlock = createDefaultBlock(dragSource.blockType);
+      setStacks((prev) =>
+        prev.map((s) => {
+          if (s.id !== targetStackId) return s;
+          const next = [...s.blocks];
+          const clampedIdx = Math.max(0, Math.min(next.length, targetIndex));
+          next.splice(clampedIdx, 0, newBlock);
+          return { ...s, blocks: next };
+        })
+      );
+      setSelectedStackId(targetStackId);
+    } else {
+      const { stackId: srcStackId, index: srcIndex } = dragSource;
+      setStacks((prev) => {
+        const srcStack = prev.find((s) => s.id === srcStackId);
+        if (!srcStack || srcIndex < 0 || srcIndex >= srcStack.blocks.length) return prev;
+        const moving = srcStack.blocks[srcIndex];
+
+        if (srcStackId === targetStackId) {
+          const next = [...srcStack.blocks];
+          next.splice(srcIndex, 1);
+          const adjustedIdx = srcIndex < targetIndex ? targetIndex - 1 : targetIndex;
+          const clampedIdx = Math.max(0, Math.min(next.length, adjustedIdx));
+          next.splice(clampedIdx, 0, moving);
+          return prev.map((s) => (s.id === srcStackId ? { ...s, blocks: next } : s));
+        }
+
+        return prev.map((s) => {
+          if (s.id === srcStackId) {
+            const next = [...s.blocks];
+            next.splice(srcIndex, 1);
+            return { ...s, blocks: next };
+          }
+          if (s.id === targetStackId) {
+            const next = [...s.blocks];
+            const clampedIdx = Math.max(0, Math.min(next.length, targetIndex));
+            next.splice(clampedIdx, 0, moving);
+            return { ...s, blocks: next };
+          }
+          return s;
+        });
+      });
+      setSelectedStackId(targetStackId);
+    }
+
+    setDragSource(null);
+    setDropTarget(null);
+  };
+
   const paletteItems: Array<{
     type: SimpleBlock['type'];
     label: string;
@@ -315,18 +375,35 @@ export const SimpleBlocksMode: React.FC<Props> = ({ lang }) => {
 
       {/* Block Palette */}
       <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
-        <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
-          {t.simple.addBlock} →{' '}
-          <span className="text-blue-400">
-            #{stacks.findIndex((s) => s.id === selectedStackId) + 1}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+            {t.simple.addBlock} →{' '}
+            <span className="text-blue-400">
+              #{stacks.findIndex((s) => s.id === selectedStackId) + 1}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500">
+            {lang === 'pl'
+              ? 'Kliknij lub przeciągnij klocki, aby zmienić ich kolejność'
+              : 'Click or drag & drop blocks to reorder'}
           </span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {paletteItems.map((item) => (
             <button
               key={item.type}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('text/plain', item.type);
+                setDragSource({ kind: 'palette', blockType: item.type });
+              }}
+              onDragEnd={() => {
+                setDragSource(null);
+                setDropTarget(null);
+              }}
               onClick={() => addBlockToSelected(item.type)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white transition shadow-sm ${item.color}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white transition shadow-sm cursor-grab active:cursor-grabbing ${item.color}`}
             >
               {item.icon}
               {item.label}
@@ -487,40 +564,109 @@ export const SimpleBlocksMode: React.FC<Props> = ({ lang }) => {
                 {/* Action Blocks */}
                 {stack.blocks.map((block, bIdx) => {
                   const isActive = activeId === block.id;
+                  const isDraggingThis =
+                    dragSource?.kind === 'block' &&
+                    dragSource.stackId === stack.id &&
+                    dragSource.index === bIdx;
+                  const showDropBefore =
+                    dropTarget?.stackId === stack.id && dropTarget.index === bIdx;
+                  const showDropAfter =
+                    bIdx === stack.blocks.length - 1 &&
+                    dropTarget?.stackId === stack.id &&
+                    dropTarget.index === stack.blocks.length;
+
                   return (
-                    <div
-                      key={block.id}
-                      className={`shrink-0 min-w-[148px] rounded-xl border-2 p-2.5 flex flex-col justify-between gap-2 transition-all ${blockAccent(
-                        block.type
-                      )} ${isActive ? 'ring-2 ring-white scale-[1.03] shadow-lg shadow-blue-500/30' : ''}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-200 truncate">
-                          {t.simple.blocks[block.type]}
-                        </span>
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            onClick={() => moveBlock(stack.id, bIdx, -1)}
-                            disabled={bIdx === 0}
-                            className="p-0.5 rounded hover:bg-white/10 disabled:opacity-30"
-                          >
-                            <ArrowLeft className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => moveBlock(stack.id, bIdx, 1)}
-                            disabled={bIdx === stack.blocks.length - 1}
-                            className="p-0.5 rounded hover:bg-white/10 disabled:opacity-30"
-                          >
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => deleteBlock(stack.id, block.id)}
-                            className="p-0.5 rounded hover:bg-rose-500/30 text-slate-300 hover:text-rose-200"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                    <React.Fragment key={block.id}>
+                      {showDropBefore && (
+                        <div className="w-1.5 shrink-0 rounded-full bg-sky-400 shadow-[0_0_12px_#38bdf8] my-1 transition-all" />
+                      )}
+                      <div
+                        draggable
+                        onDragStart={(e) => {
+                          const tag = (e.target as HTMLElement | null)?.tagName;
+                          if (tag === 'INPUT' || tag === 'SELECT' || tag === 'OPTION') {
+                            e.preventDefault();
+                            return;
+                          }
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', block.id);
+                          setDragSource({ kind: 'block', stackId: stack.id, index: bIdx });
+                        }}
+                        onDragOver={(e) => {
+                          if (!dragSource) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect =
+                            dragSource.kind === 'palette' ? 'copy' : 'move';
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+                          const idx = isLeftHalf ? bIdx : bIdx + 1;
+                          if (
+                            dropTarget?.stackId !== stack.id ||
+                            dropTarget?.index !== idx
+                          ) {
+                            setDropTarget({ stackId: stack.id, index: idx });
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const isLeftHalf = e.clientX < rect.left + rect.width / 2;
+                          handleDropAt(stack.id, isLeftHalf ? bIdx : bIdx + 1);
+                        }}
+                        onDragEnd={() => {
+                          setDragSource(null);
+                          setDropTarget(null);
+                        }}
+                        className={`shrink-0 min-w-[156px] rounded-xl border-2 p-2.5 flex flex-col justify-between gap-2 transition-all cursor-grab active:cursor-grabbing ${blockAccent(
+                          block.type
+                        )} ${isActive ? 'ring-2 ring-white scale-[1.03] shadow-lg shadow-blue-500/30' : ''} ${
+                          isDraggingThis ? 'opacity-40 scale-95' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-200 truncate flex items-center gap-1">
+                            <GripVertical className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            {t.simple.blocks[block.type]}
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              title={lang === 'pl' ? 'Przesuń w lewo' : 'Move left'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveBlock(stack.id, bIdx, -1);
+                              }}
+                              disabled={bIdx === 0}
+                              className="p-1 rounded hover:bg-white/15 disabled:opacity-25"
+                            >
+                              <ArrowLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title={lang === 'pl' ? 'Przesuń w prawo' : 'Move right'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                moveBlock(stack.id, bIdx, 1);
+                              }}
+                              disabled={bIdx === stack.blocks.length - 1}
+                              className="p-1 rounded hover:bg-white/15 disabled:opacity-25"
+                            >
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title={lang === 'pl' ? 'Usuń klocek' : 'Delete block'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteBlock(stack.id, block.id);
+                              }}
+                              className="p-1 rounded hover:bg-rose-500/30 text-slate-300 hover:text-rose-200"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
 
                       {/* Block-specific controls */}
                       {block.type === 'motor' && (
@@ -747,9 +893,44 @@ export const SimpleBlocksMode: React.FC<Props> = ({ lang }) => {
                                 : 'Press Hub'}
                         </div>
                       )}
-                    </div>
+                      </div>
+                      {showDropAfter && (
+                        <div className="w-1.5 shrink-0 rounded-full bg-sky-400 shadow-[0_0_12px_#38bdf8] my-1 transition-all" />
+                      )}
+                    </React.Fragment>
                   );
                 })}
+
+                {/* End-of-stack drop zone */}
+                <div
+                  onDragOver={(e) => {
+                    if (!dragSource) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect =
+                      dragSource.kind === 'palette' ? 'copy' : 'move';
+                    if (
+                      dropTarget?.stackId !== stack.id ||
+                      dropTarget?.index !== stack.blocks.length
+                    ) {
+                      setDropTarget({ stackId: stack.id, index: stack.blocks.length });
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDropAt(stack.id, stack.blocks.length);
+                  }}
+                  className={`shrink-0 min-w-[64px] flex-1 rounded-xl border-2 border-dashed flex items-center justify-center text-[11px] transition ${
+                    dragSource
+                      ? dropTarget?.stackId === stack.id &&
+                        dropTarget?.index === stack.blocks.length
+                        ? 'border-sky-400 bg-sky-500/15 text-sky-300'
+                        : 'border-slate-700 bg-slate-900/40 text-slate-400'
+                      : 'border-transparent text-transparent'
+                  }`}
+                >
+                  {dragSource ? (lang === 'pl' ? '+ Upuść tutaj' : '+ Drop here') : ''}
+                </div>
               </div>
             </div>
           );
