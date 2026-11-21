@@ -8,6 +8,105 @@ export interface PythonExample {
 
 export const PYTHON_EXAMPLES: PythonExample[] = [
   {
+    id: 'adaptive-cruise-acc',
+    namePl: 'Tempomat aktywny (ACC + włącznik na przycisk Hubu)',
+    nameEn: 'Adaptive Cruise Control (ACC + Hub Button Toggle)',
+    codePl: `# Tempomat aktywny (ACC) z przyciskiem Hubu (ON/OFF) i płynnym utrzymywaniem dystansu
+from wedo import *
+
+V_SET = 85          # prędkość zadana (%)
+MIN_POWER = 22      # minimalna moc, żeby silnik nie utknął
+STOP_DIST = 2.5     # awaryjne hamowanie (< 2.5)
+FOLLOW_DIST = 7.5   # strefa dopasowania prędkości
+
+acc_enabled = True
+
+async def toggle_acc():
+    global acc_enabled
+    acc_enabled = not acc_enabled
+    if acc_enabled:
+        print("ACC: WŁĄCZONY")
+        await tone(784, 120)
+    else:
+        print("ACC: WYŁĄCZONY (pauza)")
+        await stop_motor(brake=True)
+        await tone(392, 180)
+
+on_button(toggle_acc)
+await melody("startup")
+print("Tempomat aktywny gotowy! Naciśnij przycisk Hubu, aby włączyć/wyłączyć.")
+
+while True:
+    if not acc_enabled:
+        await led_rgb(40, 110, 255)
+        await wait(0.08)
+        continue
+
+    d = distance()
+    if d < STOP_DIST:
+        await stop_motor(brake=True)
+        await led_rgb(255, 20, 20)
+        await tone(880, 100)
+    elif d < FOLLOW_DIST:
+        ratio = (d - STOP_DIST) / (FOLLOW_DIST - STOP_DIST)
+        power = int(MIN_POWER + ratio * (V_SET - MIN_POWER))
+        await motor(power)
+        await led_rgb(255, int(60 + 180 * ratio), 0)
+    else:
+        await motor(V_SET)
+        await led_rgb(0, 230, 80)
+
+    await wait(0.08)
+`,
+    codeEn: `# Adaptive Cruise Control (ACC) with Hub Button ON/OFF toggle and smooth speed matching
+from wedo import *
+
+V_SET = 85          # target cruise speed (%)
+MIN_POWER = 22      # anti-stall minimum motor power
+STOP_DIST = 2.5     # emergency braking threshold
+FOLLOW_DIST = 7.5   # adaptive following zone
+
+acc_enabled = True
+
+async def toggle_acc():
+    global acc_enabled
+    acc_enabled = not acc_enabled
+    if acc_enabled:
+        print("ACC: ENABLED")
+        await tone(784, 120)
+    else:
+        print("ACC: PAUSED")
+        await stop_motor(brake=True)
+        await tone(392, 180)
+
+on_button(toggle_acc)
+await melody("startup")
+print("ACC ready! Press Hub button to toggle ON/OFF.")
+
+while True:
+    if not acc_enabled:
+        await led_rgb(40, 110, 255)
+        await wait(0.08)
+        continue
+
+    d = distance()
+    if d < STOP_DIST:
+        await stop_motor(brake=True)
+        await led_rgb(255, 20, 20)
+        await tone(880, 100)
+    elif d < FOLLOW_DIST:
+        ratio = (d - STOP_DIST) / (FOLLOW_DIST - STOP_DIST)
+        power = int(MIN_POWER + ratio * (V_SET - MIN_POWER))
+        await motor(power)
+        await led_rgb(255, int(60 + 180 * ratio), 0)
+    else:
+        await motor(V_SET)
+        await led_rgb(0, 230, 80)
+
+    await wait(0.08)
+`,
+  },
+  {
     id: 'proportional-pid',
     namePl: 'Regulator prędkości od odległości (P-controller)',
     nameEn: 'Distance-Proportional Speed Controller',

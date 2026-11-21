@@ -71,6 +71,57 @@ export const SIMPLE_EXAMPLES: SimpleExample[] = [
     ],
   },
   {
+    id: 'adaptive-cruise',
+    namePl: 'Tempomat aktywny (ACC — 4 strefy + przycisk)',
+    nameEn: 'Adaptive Cruise Control (ACC — 4 Zones + Button)',
+    descPl: 'Utrzymuje zadaną prędkość, płynnie zwalnia w 2 strefach i hamuje awaryjnie poniżej 2.5. Przycisk Hubu zatrzymuje pojazd.',
+    descEn: 'Maintains cruise speed, slows down across 2 distance zones, and hard-brakes below 2.5. Hub button stops the vehicle.',
+    stacks: [
+      {
+        id: 'acc-cruise',
+        trigger: { type: 'distance', op: '>', valueA: 7.0, valueB: 10.0 },
+        blocks: [
+          { id: 'ac1', type: 'led', hex: '#22c55e' },
+          { id: 'ac2', type: 'motor', power: 85, port: 'auto' },
+        ],
+      },
+      {
+        id: 'acc-follow',
+        trigger: { type: 'distance', op: 'between', valueA: 4.5, valueB: 7.0 },
+        blocks: [
+          { id: 'af1', type: 'led', hex: '#eab308' },
+          { id: 'af2', type: 'motor', power: 50, port: 'auto' },
+        ],
+      },
+      {
+        id: 'acc-slow',
+        trigger: { type: 'distance', op: 'between', valueA: 2.5, valueB: 4.5 },
+        blocks: [
+          { id: 'as1', type: 'led', hex: '#f97316' },
+          { id: 'as2', type: 'motor', power: 25, port: 'auto' },
+        ],
+      },
+      {
+        id: 'acc-brake',
+        trigger: { type: 'distance', op: '<', valueA: 2.5, valueB: 10.0 },
+        blocks: [
+          { id: 'ab1', type: 'stopMotor', brake: true, port: 'auto' },
+          { id: 'ab2', type: 'led', hex: '#ef4444' },
+          { id: 'ab3', type: 'tone', freq: 880, durationMs: 160 },
+        ],
+      },
+      {
+        id: 'acc-btn',
+        trigger: { type: 'button' },
+        blocks: [
+          { id: 'ax1', type: 'stopMotor', brake: true, port: 'auto' },
+          { id: 'ax2', type: 'led', hex: '#3b82f6' },
+          { id: 'ax3', type: 'tone', freq: 440, durationMs: 180 },
+        ],
+      },
+    ],
+  },
+  {
     id: 'tilt-controller',
     namePl: 'Sterownik na przechył + przycisk',
     nameEn: 'Tilt & Hub Button Controller',
