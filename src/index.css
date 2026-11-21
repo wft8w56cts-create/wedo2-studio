@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Blockly dark theme scrollbar & toolbox polish */
+.blocklyToolboxDiv {
+  border-right: 1px solid #1e293b;
+}
+
+.blocklyTreeRow {
+  padding: 6px 10px !important;
+  border-radius: 6px;
+  margin: 2px 4px;
+}
+
+.blocklyFlyoutBackground {
+  fill-opacity: 0.96;
+}
